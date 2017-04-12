@@ -1,0 +1,19 @@
+{
+  "name": "avoid-wall-convnetjs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node app.js /dev/tty.Makeblock-ELETSPP"
+  },
+  "author": "Balazs Suhajda",
+  "license": "WTFPL",
+  "dependencies": {
+    "convnetjs": "^0.3.0",
+    "johnny-five": "^0.10.6",
+    "linear-scale": "0.0.2",
+    "node-pixel": "^0.9.1",
+    "single-line-log": "^1.1.2"
+  }
+}
