@@ -23,7 +23,8 @@ opts.port = process.argv[2] || "";
 var board = new five.Board(opts);
 
 // mBot config
-var l_motorspeed = 0,		// current left motor speed [0-1]
+var l_motor, r_motor,		// five.Motor objects
+	l_motorspeed = 0,		// current left motor speed [0-1]
     r_motorspeed = 0,		// current right motor speed [0-1]
     max_motorspeed = 160,	// max motor speed [0-255]
     safe_distance = 0.2,	// 20 cm
@@ -46,6 +47,8 @@ function roundToDecimal(n) {
 
 function onKeypress(str, key) {
     if (key.ctrl && key.name === 'c') {
+		// lets stop the motors before exit
+		setMotors(0, 0);
         process.exit();
     } else if (key.name == 's') {
         var json = brain.value_net.toJSON();
@@ -56,6 +59,13 @@ function onKeypress(str, key) {
     }
 }
 
+function setMotors(l_motorspeed, r_motorspeed) {
+	if (l_motorspeed > 0) l_motor.reverse(l_motorspeed * max_motorspeed);
+	else l_motor.forward(-l_motorspeed * max_motorspeed);
+	if (r_motorspeed > 0) r_motor.forward(r_motorspeed * max_motorspeed);
+	else r_motor.reverse(-r_motorspeed * max_motorspeed);
+}
+
 
 process.stdin.on('keypress', onKeypress);
 
@@ -64,13 +74,13 @@ board.on("ready", function() {
     /**
      * Motors
      */
-    var l_motor = new five.Motor({
+    l_motor = new five.Motor({
         pins: {
             pwm: 6,
             dir: 7
         }
     });
-    var r_motor = new five.Motor({
+    r_motor = new five.Motor({
         pins: {
             pwm: 5,
             dir: 4
@@ -148,9 +158,6 @@ board.on("ready", function() {
         l_motorspeed = constrain(l_motorspeed, -1, 1);
         r_motorspeed = constrain(r_motorspeed, -1, 1);
 
-        if (l_motorspeed > 0) l_motor.reverse(l_motorspeed * max_motorspeed);
-        else l_motor.forward(Math.abs(l_motorspeed * max_motorspeed));
-        if (r_motorspeed > 0) r_motor.forward(r_motorspeed * max_motorspeed);
-        else r_motor.reverse(Math.abs(r_motorspeed * max_motorspeed));
+		setMotors(l_motorspeed, r_motorspeed);
     });
 });
