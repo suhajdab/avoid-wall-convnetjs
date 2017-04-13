@@ -24,6 +24,7 @@ var board = new five.Board(opts);
 
 // mBot config
 var l_motor, r_motor,		// five.Motor objects
+	r_proximitySensor,		// five.Proximity object
 	l_motorspeed = 0,		// current left motor speed [0-1]
     r_motorspeed = 0,		// current right motor speed [0-1]
     max_motorspeed = 160,	// max motor speed [0-255]
@@ -48,8 +49,9 @@ function roundToDecimal(n) {
 function onKeypress(str, key) {
     if (key.ctrl && key.name === 'c') {
 		// lets stop the motors before exit
+		r_proximitySensor.removeListener("data", onProximityData);
 		setMotors(0, 0);
-        process.exit();
+		setTimeout(process.exit, 10);
     } else if (key.name == 's') {
         var json = brain.value_net.toJSON();
         var str = JSON.stringify(json);
@@ -67,97 +69,106 @@ function setMotors(l_motorspeed, r_motorspeed) {
 }
 
 
+function onBoardReady() {
+
+	    /**
+	     * Motors
+	     */
+	    l_motor = new five.Motor({
+	        pins: {
+	            pwm: 6,
+	            dir: 7
+	        }
+	    });
+	    r_motor = new five.Motor({
+	        pins: {
+	            pwm: 5,
+	            dir: 4
+	        }
+	    });
+
+
+	    /**
+	     * Sonar
+	     */
+	    r_proximitySensor = new five.Proximity({
+	        freq: proximityFreq,
+	        controller: "HCSR04",
+	        pin: 10 // port 2
+	    });
+
+	    var l_proximitySensor = new five.Proximity({
+	        freq: proximityFreq,
+	        controller: "HCSR04",
+	        pin: 12 // port 2
+	    });
+
+	    l_proximitySensor.on("data", function() {
+	        l_proximity = roundToDecimal(this.cm / 100);
+	    });
+
+	    r_proximitySensor.on("data", onProximityData);
+}
+
+function onProximityData() {
+	var fullsteam_reward = 0,
+		movement_reward = 0,
+		proximity_penalty = 0,
+		proximity_reward = 0,
+		reward = 0;
+	var r_proximity = roundToDecimal(this.cm / 100);
+	var forward = [r_proximity, l_proximity, l_motorspeed, r_motorspeed];
+	var action = brain.forward(forward);
+
+	// calculate reward
+	// proximity_reward = (r_proximity > safe_distance && l_proximity > safe_distance) ? 0.5 : 0;
+	// punish hiting wall
+	if (!hitWall && (r_proximity < safe_distance || l_proximity < safe_distance)) {
+		hitWall = true;
+		proximity_penalty = -4;
+	} else if (r_proximity > safe_distance && l_proximity > safe_distance) {
+		hitWall = false;
+	}
+	// celebrate clear path and full steam ahead
+	if (r_proximity > safe_distance && l_proximity > safe_distance && l_motorspeed + r_motorspeed > 0) {
+		fullsteam_reward = 1;
+	}
+
+	// movement_reward = scaleMovementReward(l_motorspeed + r_motorspeed);
+	var reward = proximity_penalty + proximity_reward + fullsteam_reward + movement_reward;
+
+	brain.backward(reward);
+
+	log('action: ' + action + '\nforward: ' + forward.join('\t') + '\nreward: ' + reward + '\nreport: ' + brain.report().join('\n') + '\n');
+
+	switch (action) {
+		case 0:
+			l_motorspeed += .5;
+			break;
+		case 1:
+			l_motorspeed -= .5;
+			break;
+		case 2:
+			r_motorspeed += .5;
+			break;
+		case 3:
+			r_motorspeed -= .5;
+			break;
+	}
+
+	// emergency stop before hitting the wall
+	if ((r_proximity <= 0.05 || l_proximity <= 0.05) && (l_motorspeed > 0 || r_motorspeed > 0)) {
+		l_motorspeed = 0;
+		r_motorspeed = 0;
+	}
+
+	l_motorspeed = constrain(l_motorspeed, -1, 1);
+	r_motorspeed = constrain(r_motorspeed, -1, 1);
+
+	setMotors(l_motorspeed, r_motorspeed);
+}
+
+
+// Let's get this party started
 process.stdin.on('keypress', onKeypress);
-
-board.on("ready", function() {
-
-    /**
-     * Motors
-     */
-    l_motor = new five.Motor({
-        pins: {
-            pwm: 6,
-            dir: 7
-        }
-    });
-    r_motor = new five.Motor({
-        pins: {
-            pwm: 5,
-            dir: 4
-        }
-    });
-
-
-    /**
-     * Sonar
-     */
-    var r_proximitySensor = new five.Proximity({
-        freq: proximityFreq,
-        controller: "HCSR04",
-        pin: 10 // port 2
-    });
-
-    var l_proximitySensor = new five.Proximity({
-        freq: proximityFreq,
-        controller: "HCSR04",
-        pin: 12 // port 2
-    });
-
-    l_proximitySensor.on("data", function() {
-        l_proximity = roundToDecimal(this.cm / 100);
-    });
-
-    r_proximitySensor.on("data", function() {
-        var fullsteam_reward = 0,
-			proximity_penalty = 0;
-        var r_proximity = roundToDecimal(this.cm / 100);
-        var forward = [r_proximity, l_proximity, l_motorspeed, r_motorspeed];
-        var action = brain.forward(forward);
-
-		// calculate reward
-		// punish hiting wall
-		if (!hitWall && (r_proximity < safe_distance || l_proximity < safe_distance)) {
-			hitWall = true;
-			proximity_penalty = -4;
-		} else if (r_proximity > safe_distance && l_proximity > safe_distance) {
-			hitWall = false;
-		}
-		// celebrate clear path and full steam ahead
-		if (r_proximity > safe_distance && l_proximity > safe_distance && l_motorspeed + r_motorspeed == 2) {
-			fullsteam_reward = 4;
-		}
-
-        var movement_reward = scaleMovementReward(l_motorspeed + r_motorspeed);
-        var reward = proximity_penalty + fullsteam_reward + movement_reward;
-
-        brain.backward(reward);
-
-        log('action: ' + action + '\nforward: ' + forward.join('\t') + '\nreward: ' + reward + '\nreport: ' + brain.report().join('\n') + '\n');
-
-        switch (action) {
-            case 0:
-                l_motorspeed += .5;
-                break;
-            case 1:
-                l_motorspeed -= .5;
-                break;
-            case 2:
-                r_motorspeed += .5;
-                break;
-            case 3:
-                r_motorspeed -= .5;
-                break;
-        }
-
-        // emergency stop before hitting the wall
-        if ((r_proximity <= 0.05 || l_proximity <= 0.05) && (l_motorspeed > 0 || r_motorspeed > 0)) {
-            l_motorspeed = 0;
-            r_motorspeed = 0;
-        }
-
-        l_motorspeed = constrain(l_motorspeed, -1, 1);
-        r_motorspeed = constrain(r_motorspeed, -1, 1);
-
-		setMotors(l_motorspeed, r_motorspeed);
-    });
-});
+board.on("ready", onBoardReady);
