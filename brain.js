@@ -19,12 +19,12 @@ layer_defs.push({
 });
 layer_defs.push({
     type: 'fc',
-    num_neurons: 20,
+    num_neurons: 10,
     activation: 'relu'
 });
 layer_defs.push({
     type: 'fc',
-    num_neurons: 20,
+    num_neurons: 10,
     activation: 'relu'
 });
 layer_defs.push({
@@ -37,7 +37,7 @@ layer_defs.push({
 var tdtrainer_options = {
     learning_rate: 0.001,
     momentum: 0.0,
-    batch_size: 64,
+    batch_size: 100,
     l2_decay: 0.01
 };
 
